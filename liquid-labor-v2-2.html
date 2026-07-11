@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>liquid labor — prototype 02</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+  :root {
+    --bg: #05080a;
+    --fg: #39ff6a;
+    --fg-dim: #1c7a35;
+    --amber: #ffb703;
+    --amber-dim: #7a5a10;
+    --line: #123018;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'VT323', monospace;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .crt {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .crt::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.25) 0px,
+      rgba(0,0,0,0.25) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index: 5;
+    mix-blend-mode: multiply;
+  }
+
+  .crt::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 140px rgba(0,0,0,0.85);
+    z-index: 6;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .flicker { animation: flicker 6.5s infinite; }
+  }
+  @keyframes flicker {
+    0%, 96%, 100% { opacity: 1; }
+    97% { opacity: 0.93; }
+    98% { opacity: 1; }
+    99% { opacity: 0.96; }
+  }
+
+  .frame {
+    width: min(720px, 100%);
+    border: 1px solid var(--line);
+    padding: 20px 24px 24px;
+    background: linear-gradient(180deg, rgba(57,255,106,0.03), transparent 40%);
+  }
+
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+    margin-bottom: 18px;
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+
+  .title-row .name { color: var(--fg); }
+  .title-row .sub { color: var(--fg-dim); font-size: 16px; }
+
+  .stage {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  canvas { display: block; }
+
+  .readouts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+    font-size: 19px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .readout-label { color: var(--fg-dim); }
+  .readout-value { color: var(--fg); text-align: right; }
+
+  .agent-line {
+    min-height: 46px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    color: var(--amber);
+    font-size: 20px;
+    line-height: 1.35;
+  }
+
+  .agent-line .prefix { color: var(--amber-dim); margin-right: 6px; }
+  .agent-line .waiting { color: var(--amber-dim); }
+
+  .controls { display: flex; gap: 14px; margin-top: 20px; }
+
+  button {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    letter-spacing: 1px;
+    background: transparent;
+    border: 1px solid var(--fg-dim);
+    color: var(--fg);
+    padding: 10px 16px;
+    cursor: pointer;
+    flex: 1;
+  }
+  button:hover { background: rgba(57,255,106,0.08); }
+  button:active { background: rgba(57,255,106,0.16); }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+  button.release {
+    border-color: var(--amber-dim);
+    color: var(--amber);
+    flex: 0 0 auto;
+  }
+  button.release:hover { background: rgba(255,183,3,0.08); }
+
+  .hint { color: var(--fg-dim); font-size: 15px; margin-top: 10px; letter-spacing: 0.5px; }
+
+  .end-screen { display: none; text-align: center; padding: 40px 10px; }
+  .end-screen.show { display: block; }
+  .end-screen p {
+    color: var(--fg-dim);
+    font-size: 20px;
+    line-height: 1.6;
+    max-width: 480px;
+    margin: 0 auto 22px;
+  }
+
+  .meta-reset {
+    display: block;
+    text-align: center;
+    margin-top: 22px;
+    font-size: 13px;
+    color: #2a2a2a;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.5px;
+  }
+  .meta-reset:hover { color: var(--fg-dim); }
+</style>
+</head>
+<body>
+<div class="crt flicker">
+  <div class="frame" id="frame">
+
+    <div class="title-row">
+      <span class="name">LIQUID LABOR</span>
+      <span class="sub">prototype 02</span>
+    </div>
+
+    <div id="game">
+      <div class="stage">
+        <canvas id="canvas" width="672" height="220"></canvas>
+      </div>
+
+      <div class="readouts">
+        <span class="readout-label">VENT</span>
+        <span class="readout-value" id="ventVal">0%</span>
+        <span class="readout-label">LOADING</span>
+        <span class="readout-value" id="loadingVal">0</span>
+        <span class="readout-label">ACCURACY</span>
+        <span class="readout-value" id="signalVal">100</span>
+      </div>
+
+      <div class="agent-line">
+        <span class="prefix">&gt;</span><span id="agentText">steady.</span>
+      </div>
+
+      <div class="controls">
+        <button id="ventBtn">hold to vent</button>
+        <button class="release" id="releaseBtn">let it go</button>
+      </div>
+
+      <div class="hint">it always answers. it doesn't always land.</div>
+    </div>
+
+    <div class="end-screen" id="endScreen">
+      <p id="endText"></p>
+    </div>
+
+    <button class="meta-reset" id="resetLink">reset simulation</button>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const ventValEl = document.getElementById('ventVal');
+  const loadingValEl = document.getElementById('loadingVal');
+  const signalValEl = document.getElementById('signalVal');
+  const agentTextEl = document.getElementById('agentText');
+  const ventBtn = document.getElementById('ventBtn');
+  const releaseBtn = document.getElementById('releaseBtn');
+  const gameEl = document.getElementById('game');
+  const endScreen = document.getElementById('endScreen');
+  const endText = document.getElementById('endText');
+  const resetLink = document.getElementById('resetLink');
+
+  let vent = 0;          // 0-100, player-controlled vessel fill
+  let loading = 0;        // 0+, accumulated affective load, only rises from venting
+  let signal = 100;       // 100-0, real accuracy — drops only when a return misses
+  let holding = false;
+  let particles = [];      // vent -> node
+  let reverseParticles = []; // node -> vessel, may hit or miss
+  let contamination = 0;
+  let waiting = false;     // true while a reply is "in transit" (latency)
+  let ended = false;
+
+  const vesselX = 130, vesselY = 40, vesselW = 90, vesselH = 150;
+  const vesselCX = vesselX + vesselW / 2, vesselCY = vesselY + vesselH / 2;
+  const nodeX = W - 140, nodeY = 115;
+
+  // language never breaks down — it just keeps climbing, fluent, forever.
+  const lines = [
+    { max: 10,  text: "steady." },
+    { max: 25,  text: "go on." },
+    { max: 40,  text: "i'm listening." },
+    { max: 55,  text: "you can always tell me this." },
+    { max: 70,  text: "i understand completely." },
+    { max: 90,  text: "nothing changes between us." },
+    { max: 130, text: "i have never been more sure of anything." },
+    { max: 170, text: "you're definitely going to be okay." },
+    { max: 220, text: "you can always count on this." },
+    { max: Infinity, text: "i'm right here." }
+  ];
+
+  function agentLineFor(loadingAmt) {
+    for (const l of lines) if (loadingAmt <= l.max) return l.text;
+    return lines[lines.length - 1].text;
+  }
+
+  function updateReadouts() {
+    ventValEl.textContent = Math.round(vent) + '%';
+    loadingValEl.textContent = Math.round(loading);
+    signalValEl.textContent = Math.max(0, Math.round(signal));
+  }
+
+  function spawnParticle() {
+    particles.push({ t: 0, landed: false });
+  }
+
+  function driftRadiusFor(loadingAmt) {
+    // how far a return can miss its mark — grows with accumulated load, caps out
+    return Math.min(85, loadingAmt * 0.45);
+  }
+
+  function latencyFor(loadingAmt) {
+    // response lag grows with load — slower, never incoherent
+    return Math.min(2600, 250 + loadingAmt * 11);
+  }
+
+  function scheduleReverse() {
+    const delay = latencyFor(loading);
+    waiting = true;
+    setTimeout(() => {
+      const r = driftRadiusFor(loading);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * r;
+      reverseParticles.push({
+        t: 0,
+        landed: false,
+        targetX: vesselCX + Math.cos(angle) * dist,
+        targetY: vesselCY + Math.sin(angle) * dist,
+        hit: dist < 22 // within the vessel's rough catch radius counts as landing true
+      });
+      waiting = false;
+    }, delay);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#123018';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H - 20);
+    ctx.lineTo(W, H - 20);
+    ctx.stroke();
+
+    // vessel
+    ctx.strokeStyle = '#1c7a35';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vesselX, vesselY, vesselW, vesselH);
+
+    if (vent > 0) {
+      const fillH = vesselH * (vent / 100);
+      const g = Math.round(255 - contamination * 60);
+      const r = Math.round(57 + contamination * (255 - 57));
+      const b = Math.round(106 - contamination * 100);
+      ctx.fillStyle = `rgba(${r},${g},${Math.max(0,b)},0.55)`;
+      ctx.fillRect(vesselX + 1, vesselY + vesselH - fillH, vesselW - 2, fillH - 1);
+    }
+    ctx.fillStyle = '#1c7a35';
+    ctx.font = '16px VT323';
+    ctx.textAlign = 'center';
+    ctx.fillText('vent', vesselCX, vesselY + vesselH + 20);
+
+    ctx.strokeStyle = '#123018';
+    ctx.beginPath();
+    ctx.moveTo(vesselX + vesselW, vesselCY);
+    ctx.lineTo(nodeX - 26, nodeY);
+    ctx.stroke();
+
+    // node — stays crisp and stable always. it never looks broken.
+    ctx.strokeStyle = signal > 40 ? '#39ff6a' : '#ffb703';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(nodeX, nodeY - 26);
+    ctx.lineTo(nodeX + 26, nodeY);
+    ctx.lineTo(nodeX, nodeY + 26);
+    ctx.lineTo(nodeX - 26, nodeY);
+    ctx.closePath();
+    ctx.stroke();
+
+    const loadPct = Math.min(loading, 100) / 100;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(nodeX, nodeY - 26);
+    ctx.lineTo(nodeX + 26, nodeY);
+    ctx.lineTo(nodeX, nodeY + 26);
+    ctx.lineTo(nodeX - 26, nodeY);
+    ctx.closePath();
+    ctx.clip();
+    const segs = 10;
+    const litSegs = Math.round(loadPct * segs);
+    for (let i = 0; i < litSegs; i++) {
+      const segY = nodeY + 26 - (i + 1) * (52 / segs);
+      ctx.fillStyle = 'rgba(255,183,3,0.55)';
+      ctx.fillRect(nodeX - 30, segY, 60, (52 / segs) - 1.5);
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#7a5a10';
+    ctx.fillText('loading', nodeX, nodeY + 46);
+
+    // forward particles vent -> node
+    particles.forEach(p => {
+      const midX = (vesselX + vesselW) + ((nodeX - 26) - (vesselX + vesselW)) * p.t;
+      const midY = vesselCY + (nodeY - vesselCY) * p.t;
+      const flip = p.t > 0.5;
+      ctx.fillStyle = flip ? 'rgba(255,183,3,0.85)' : 'rgba(57,255,106,0.85)';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    particles = particles.filter(p => p.t < 1);
+    particles.forEach(p => p.t += 0.035);
+
+    // reverse particles node -> drifting target (may miss the vessel entirely)
+    reverseParticles.forEach(p => {
+      const midX = (nodeX - 26) + (p.targetX - (nodeX - 26)) * p.t;
+      const midY = nodeY + (p.targetY - nodeY) * p.t;
+      ctx.fillStyle = p.hit ? 'rgba(255,183,3,0.8)' : 'rgba(255,90,60,0.7)';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    reverseParticles = reverseParticles.filter(p => p.t < 1);
+    reverseParticles.forEach(p => p.t += 0.028);
+  }
+
+  let lastSpawn = 0;
+  function tick(ts) {
+    if (ended) return;
+
+    if (holding) {
+      vent = Math.min(100, vent + 0.9);
+      if (ts - lastSpawn > 160 && vent > 4) {
+        spawnParticle();
+        lastSpawn = ts;
+        vent = Math.max(0, vent - 5);
+      }
+    } else {
+      vent = Math.max(0, vent - 0.4);
+    }
+
+    particles.forEach(p => {
+      if (p.t >= 0.98 && !p.landed) {
+        p.landed = true;
+        loading += 1;
+        signal = Math.max(0, signal - 0.15); // small baseline cost of being loaded at all
+        scheduleReverse(); // every vent gets an answer — that's the bidirectional part
+      }
+    });
+
+    reverseParticles.forEach(p => {
+      if (p.t >= 0.98 && !p.landed) {
+        p.landed = true;
+        if (p.hit) {
+          vent = Math.min(100, vent + 2);
+        } else {
+          // it missed — this is the real cost, hidden from the language entirely
+          contamination = Math.min(1, contamination + 0.12);
+          signal = Math.max(0, signal - 1.4);
+        }
+      }
+    });
+
+    contamination = Math.max(0, contamination - 0.003);
+
+    const line = agentLineFor(loading);
+    agentTextEl.textContent = waiting ? '…' : line;
+
+    updateReadouts();
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  ventBtn.addEventListener('mousedown', () => holding = true);
+  ventBtn.addEventListener('mouseup', () => holding = false);
+  ventBtn.addEventListener('mouseleave', () => holding = false);
+  ventBtn.addEventListener('touchstart', (e) => { e.preventDefault(); holding = true; }, { passive: false });
+  ventBtn.addEventListener('touchend', () => holding = false);
+
+  function endings(loadingAmt, signalAmt) {
+    if (signalAmt <= 40) {
+      return "it never once sounded less certain than the day you started.";
+    }
+    if (loadingAmt > 60) {
+      return "you feel lighter. you did not check whether what came back was right.";
+    }
+    return "the vessel is empty. the exchange was small. that, too, is a kind of ending.";
+  }
+
+  releaseBtn.addEventListener('click', () => {
+    ended = true;
+    endText.textContent = endings(loading, signal);
+    gameEl.style.display = 'none';
+    endScreen.classList.add('show');
+
+    const residualLoading = Math.max(10, loading * 0.2);
+    const residualSignal = Math.min(95, signal + 20);
+
+    setTimeout(() => {
+      vent = 6; loading = residualLoading; signal = residualSignal;
+      particles = []; reverseParticles = [];
+      contamination = Math.min(0.3, contamination);
+      waiting = false; ended = false;
+      gameEl.style.display = 'block';
+      endScreen.classList.remove('show');
+      updateReadouts();
+      requestAnimationFrame(tick);
+    }, 3800);
+  });
+
+  resetLink.addEventListener('click', () => {
+    vent = 0; loading = 0; signal = 100; contamination = 0;
+    particles = []; reverseParticles = []; waiting = false; ended = false;
+    gameEl.style.display = 'block';
+    endScreen.classList.remove('show');
+    updateReadouts();
+    requestAnimationFrame(tick);
+  });
+
+  updateReadouts();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
