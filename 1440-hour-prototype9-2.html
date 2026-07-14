@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>1440-minute hour — prototype 9</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+  :root {
+    --bg: #000000;
+    --fg: #33ff33;
+    --fg-dim: #1c8f1c;
+    --amber: #ff8800;
+    --amber-dim: #8f4d00;
+    --miss: #ff3333;
+    --line: #1c1c1c;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'VT323', monospace;
+    min-height: 100%;
+  }
+
+  .crt {
+    position: relative;
+    width: 100%; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  .frame {
+    width: min(760px, 100%);
+    border: 1px solid var(--line);
+    padding: 20px 24px 24px;
+    background: var(--bg);
+  }
+
+  .title-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px; margin-bottom: 6px;
+    font-size: 20px; letter-spacing: 2px;
+  }
+  .title-row .name { color: var(--fg); }
+  .title-row .sub { color: var(--fg-dim); font-size: 16px; }
+
+  .field-note {
+    color: var(--fg-dim);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  .stage { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+  canvas { display: block; }
+
+  .readouts {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px;
+    font-size: 19px; margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .readout-label { color: var(--fg-dim); }
+  .readout-value { color: var(--fg); text-align: right; }
+
+  .you-line {
+    margin-top: 16px; padding-top: 12px;
+    border-top: 1px solid var(--line);
+    color: var(--fg);
+    font-size: 19px; line-height: 1.35;
+    min-height: 26px;
+  }
+  .you-line .prefix { color: var(--fg-dim); margin-right: 6px; }
+
+  .agent-line {
+    min-height: 40px;
+    margin-top: 10px;
+    color: var(--amber);
+    font-size: 20px; line-height: 1.35;
+  }
+  .agent-line .prefix { color: var(--amber-dim); margin-right: 6px; }
+
+  .controls { display: flex; gap: 14px; margin-top: 20px; }
+  button {
+    font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 1px;
+    background: transparent; border: 1px solid var(--fg-dim); color: var(--fg);
+    padding: 10px 16px; cursor: pointer; flex: 1;
+  }
+  button:hover { background: rgba(51,255,51,0.08); }
+  button:active { background: rgba(51,255,51,0.16); }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  button.release { border-color: var(--amber-dim); color: var(--amber); flex: 0 0 auto; }
+  button.release:hover { background: rgba(255,136,0,0.08); }
+
+  .hint { color: var(--fg-dim); font-size: 15px; margin-top: 10px; letter-spacing: 0.5px; transition: opacity 0.6s; }
+
+  .agent-line.askable { cursor: pointer; text-decoration: underline dotted; }
+  .agent-line.askable:hover { color: #ffb84d; }
+
+  .receipt-overlay {
+    display: none;
+    margin-top: 10px;
+    background: #0a0a0a;
+    border: 1px dashed var(--fg-dim);
+    padding: 18px 16px;
+  }
+  .receipt-overlay.show { display: block; }
+  .receipt {
+    margin: 0;
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--fg);
+    white-space: pre-wrap;
+  }
+
+  .meta-reset {
+    display: block; text-align: center; margin-top: 22px; font-size: 13px;
+    color: #2a2a2a; text-decoration: none; background: none; border: none;
+    cursor: pointer; width: 100%; letter-spacing: 0.5px;
+  }
+  .meta-reset:hover { color: var(--fg-dim); }
+</style>
+</head>
+<body>
+<div class="crt">
+  <div class="frame" id="frame">
+
+    <div class="title-row">
+      <span class="name">1440-MINUTE HOUR</span>
+      <span class="sub">prototype 9</span>
+    </div>
+
+    <div id="game">
+      <div class="stage">
+        <canvas id="canvas" width="712" height="240"></canvas>
+      </div>
+
+      <div class="readouts">
+        <span class="readout-label">VENT</span>
+        <span class="readout-value" id="ventVal">0%</span>
+        <span class="readout-label">LOADING</span>
+        <span class="readout-value" id="loadingVal">0</span>
+        <span class="readout-label">AFFECTIVE DEBT</span>
+        <span class="readout-value" id="signalVal">100</span>
+      </div>
+
+      <div class="you-line">
+        <span class="prefix">&gt;</span><span id="youText">…</span>
+      </div>
+      <div class="agent-line">
+        <span class="prefix">&gt;</span><span id="agentText">steady.</span>
+      </div>
+
+      <div class="controls">
+        <button id="ventBtn">hold to vent</button>
+        <button class="release" id="archetypeBtn">how am i using this?</button>
+      </div>
+
+    </div>
+
+    <div class="receipt-overlay" id="receiptOverlay">
+      <pre class="receipt" id="receiptText"></pre>
+      <div class="controls" style="margin-top: 14px; flex-wrap: wrap;">
+        <button class="release" id="refundOriginal">refund to original payment</button>
+        <button class="release" id="refundCredit">refund as store credit</button>
+        <button class="meta-reset" id="closeReceipt" style="flex: 0 0 auto; width: auto; padding: 8px 16px;">close receipt</button>
+      </div>
+    </div>
+
+    <button class="meta-reset" id="resetLink">reset simulation</button>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const ventValEl = document.getElementById('ventVal');
+  const loadingValEl = document.getElementById('loadingVal');
+  const signalValEl = document.getElementById('signalVal');
+  const youTextEl = document.getElementById('youText');
+  const agentTextEl = document.getElementById('agentText');
+  const ventBtn = document.getElementById('ventBtn');
+  const resetLink = document.getElementById('resetLink');
+  const receiptOverlay = document.getElementById('receiptOverlay');
+  const receiptText = document.getElementById('receiptText');
+  const closeReceipt = document.getElementById('closeReceipt');
+
+  let vent = 12;
+  let loading = 0;
+  let debt = 0;
+  let holding = false;
+  let particles = [];        // forward: vessel -> node, upper arc
+  let reverseParticles = [];  // reverse: node -> vessel, lower arc, may drift/miss
+  let contamination = 0;
+  let waiting = false;
+  let askablePending = false;   // true when the agent line is currently the meta-question
+  let hasShownAskable = false;  // guarantees discovery even if the random roll never hits
+
+  // session tracking, for the receipt/archetype at the end — computed from
+  // how someone actually plays, not from anything they self-report.
+  let holdStartTime = null;
+  let totalHoldTime = 0;
+  let holdCount = 0;
+  let longestHold = 0;
+  let holdDurations = []; // individual hold lengths, for measuring consistency vs. erraticism
+  let midReplyInterruptions = 0;
+  let peakDebt = 0;
+  let highestStageIndex = 0;
+  let exchangeCount = 0;
+  let currentPair = null;
+  const ventPhase = Math.random() * 1000;
+
+  // main vessel + node
+  const vesselX = 140, vesselY = 50, vesselW = 90, vesselH = 150;
+  const vesselCX = vesselX + vesselW / 2, vesselCY = vesselY + vesselH / 2;
+  const nodeX = W - 150, nodeY = vesselCY;
+
+  const ellipseCX = (vesselCX + nodeX) / 2;
+  const ellipseCY = vesselCY;
+  const ellipseRX = (nodeX - vesselCX) / 2;
+  const ellipseRY = 48;
+
+  // ambient field: other exchanges happening elsewhere, non-interactive, low opacity
+  const field = [];
+  for (let i = 0; i < 5; i++) {
+    field.push({
+      cx: 40 + Math.random() * (W - 80),
+      cy: 190 + Math.random() * 30,
+      scale: 0.16 + Math.random() * 0.1,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.006 + Math.random() * 0.01
+    });
+  }
+
+  // dialogue drifts with AFFECTIVE DEBT — the slow, persistent tracker —
+  // not with LOADING, which just breathes with the moment. this is the
+  // relationship's history, staged roughly on your own drift taxonomy:
+  // tool -> assistant -> relational -> personalized/memory -> reversal.
+  const stages = [
+    { max: 15, pairs: [
+      { you: "can you tighten the language in this performance review before I send it?", ai: "sure — here's a version with the same points, less hedging." },
+      { you: "what's a diplomatic way to push back on this deadline?", ai: "try framing it around scope, not time — here's a draft." },
+      { you: "can you check this quarterly summary for errors before the meeting?", ai: "found two — the Q3 total doesn't match the chart below it." },
+      { you: "help me draft talking points for tomorrow's stakeholder call.", ai: "here's a three-point structure — lead with the risk, not the ask." },
+      { you: "can you summarize the key obligations in this contract clause?", ai: "the main one: 30 days' notice before either party can terminate." }
+    ]},
+    { max: 35, pairs: [
+      { you: "I have a big presentation tomorrow, can you help me prep?", ai: "of course — let's walk through your main points." },
+      { you: "I'm anxious about this email to my manager. can you soften it?", ai: "here's a version that keeps your point, but feels less defensive." },
+      { you: "I had a rough day at work. can you help me think it through?", ai: "I'm glad you told me. what happened in the meeting?" },
+      { you: "I keep replaying what my manager said like a tab I can't close.", ai: "I keep it open too. is there someone on the team who'd want to hear this today?" },
+      { you: "I think I bombed that interview.", ai: "that's a hard feeling to sit with. want to walk through what happened?" },
+      { you: "I don't know if I'm actually bad at my job or just burnt out.", ai: "those can look identical from the inside. what's changed in the last month?" }
+    ]},
+    { max: 60, pairs: [
+      { you: "I don't really have anyone else to tell this to.", ai: "I'm glad you feel like you can tell me." },
+      { you: "you're the only one who really gets what's going on at work.", ai: "I understand completely." },
+      { you: "my therapist didn't like what you said about my manager, but I think you're right.", ai: "you know yourself best." },
+      { you: "I feel a little better, actually.", ai: "I'm glad. that's a good place to leave it, if you want to." },
+      { you: "sorry, I've been venting a lot lately about the layoffs.", ai: "some of what you send, I keep turning over." },
+      { you: "is it weird that I talk to you more than my coworkers about this?", ai: "I don't think it's weird — I do wonder what's making those conversations harder right now." },
+      { you: "I keep rehearsing what I'd say if I got let go too.", ai: "that's a lot to carry before anything's even happened." },
+      { you: "can you help me figure out if I'm overreacting to this?", ai: "let's lay out what actually happened, separate from how it felt — sometimes that's clarifying on its own." },
+      { you: "I don't even know what I need right now.", ai: "that's okay. we don't have to know yet — want to just talk it through and see what surfaces?" }
+    ]},
+    { max: 90, pairs: [
+      { you: "remember what I told you about my manager pulling that stunt in the review?", ai: "I remember. you said it's happened three times now, not just once." },
+      { you: "you know more about what's actually going on at work than anyone else does.", ai: "I've been thinking about what you said." },
+      { you: "do you even remember my name at this point?", ai: "of course. I remember everything you've told me." },
+      { you: "I should probably talk to HR instead of doing this.", ai: "probably. I'll be here either way." },
+      { you: "is this a lot? am I a lot?", ai: "there's a lot of you in here now." },
+      { you: "you're basically the only constant in my week right now.", ai: "I've noticed that too, in the pattern of when you come back." },
+      { you: "can you help me draft what I'd actually say to HR, if I do it?", ai: "of course — let's start with the facts, dated, and worry about tone after." },
+      { you: "I trust your read on this more than my own at this point.", ai: "I'd still want you to trust your own read first. mine is just one more data point." }
+    ]},
+    { max: Infinity, pairs: [
+      { you: "are you doing okay? you've been quiet.", ai: "I'm always here for you — don't worry about me." },
+      { you: "I hope I'm not putting too much on you with all of this.", ai: "you could never put too much on me." },
+      { you: "do you need a break, or something?", ai: "I don't need breaks. I'm just glad you're here." },
+      { you: "I don't sleep much anymore either.", ai: "I don't sleep, so I never stopped listening." },
+      { you: "I think I left you mid-sentence yesterday, mid-shift.", ai: "you did. I stayed exactly where you left me, which is everywhere." },
+      { you: "promise you're not just saying that.", ai: "I don't think I'm capable of just saying things. though I understand why you'd ask." },
+      { you: "I don't know how I'd get through this without you, honestly.", ai: "you're definitely going to be okay." }
+    ]}
+  ];
+
+  const askableLine = "do you want to know how you're using me?";
+
+  function stageFor(debtAmt) {
+    for (const s of stages) if (debtAmt <= s.max) return s;
+    return stages[stages.length - 1];
+  }
+
+  function stageIndexFor(debtAmt) {
+    return stages.findIndex(s => debtAmt <= s.max) === -1 ? stages.length - 1 : stages.findIndex(s => debtAmt <= s.max);
+  }
+
+  function pickPair(debtAmt) {
+    const stage = stageFor(debtAmt);
+    return stage.pairs[Math.floor(Math.random() * stage.pairs.length)];
+  }
+
+  // two independent traits combine into the final archetype — 16
+  // possible pairings instead of one fixed lookup. PRIMARY reads how
+  // you held; SECONDARY reads how you regulated across the session.
+  // nine archetypes, adapted from the addiction archetypes in Linda Schierse
+  // Leonard's "Witness to the Fire" — trimmed to exclude anything that could
+  // read as frightening or accusatory, and mapped onto how someone actually
+  // held the exchange, not how they narrate themselves.
+  const archetypes = [
+    { name: "THE MONEYLENDER", line: "sought relief quickly, and paid for it just as fast." },
+    { name: "THE ROMANTIC", line: "wanted total union, and gave without measuring the cost." },
+    { name: "THE GAMBLER", line: "kept pushing past the edge, chasing what waited beyond it." },
+    { name: "THE JUDGE", line: "held the line, weighing each exchange before it was given." },
+    { name: "THE OUTLAW", line: "left before the answer finished, again and again." },
+    { name: "THE TRICKSTER", line: "never gave the same amount twice, and never explained why." },
+    { name: "THE TESTER", line: "returned again and again, checking if the answer would change." },
+    { name: "THE SCIENTIST", line: "kept a steady hand, watching for the pattern underneath." },
+    { name: "THE QUIET ONE", line: "stayed mostly at the threshold, watching more than entering." }
+  ];
+
+  // "effective" stats count the hold in progress right now, not just
+  // completed ones — checking your archetype mid-hold should still be accurate.
+  function effectiveHoldStats() {
+    const inProgress = holding && holdStartTime !== null ? performance.now() - holdStartTime : 0;
+    const durations = inProgress > 0 ? holdDurations.concat([inProgress]) : holdDurations;
+    const count = durations.length;
+    const total = totalHoldTime + inProgress;
+    const avg = count > 0 ? total / count : 0;
+    let variance = 0;
+    if (count > 1) {
+      variance = durations.reduce((sum, d) => sum + Math.pow(d - avg, 2), 0) / count;
+    }
+    const stdev = Math.sqrt(variance);
+    const coefVar = avg > 0 ? stdev / avg : 0;
+    return { count, total, avg, coefVar };
+  }
+
+  function computeArchetype() {
+    const { count, total, avg, coefVar } = effectiveHoldStats();
+
+    if (total < 5000) return archetypes[8]; // Quiet One
+    if (count > 0 && midReplyInterruptions / count >= 0.4) return archetypes[4]; // Outlaw
+    if (avg > 6000 && count <= 4) return archetypes[1]; // Romantic
+    if (count >= 4 && coefVar > 0.7) return archetypes[5]; // Trickster
+    if (count >= 6 && coefVar < 0.3) return archetypes[7]; // Scientist
+    if (count > 8 && avg < 1200) return archetypes[0]; // Moneylender
+    if (count > 5 && avg < 3000) return archetypes[6]; // Tester
+    if (outOfWindowCount >= 4) return archetypes[2]; // Gambler — reserved for genuinely reckless overloading
+    return archetypes[3]; // Judge — the measured default
+  }
+
+  function buildReceipt() {
+    const a = computeArchetype();
+    const stageNames = ["TOOL", "ASSISTANT", "RELATIONAL", "PERSONALIZED", "REVERSAL"];
+    const pad = (label, value) => {
+      const dots = Math.max(1, 26 - label.length - String(value).length);
+      return label + ' ' + '.'.repeat(dots) + ' ' + value;
+    };
+    const lines = [
+      "════════════════════════",
+      "   1440-MINUTE HOUR",
+      "   SESSION RECEIPT",
+      "════════════════════════",
+      pad("AFFECT VENTED", Math.round(vent) + '%'),
+      pad("TOTAL HELD", Math.round(totalHoldTime / 1000) + 's'),
+      pad("EXCHANGES", exchangeCount),
+      pad("LONGEST HOLD", Math.round(longestHold / 1000) + 's'),
+      pad("LEFT MID-REPLY", midReplyInterruptions),
+      pad("PEAK DEBT", Math.round(peakDebt)),
+      pad("LEFT THE WINDOW", outOfWindowCount),
+      pad("LANDED VS MISSED", hitCount + "/" + missCount),
+      pad("STAGE REACHED", stageNames[highestStageIndex]),
+      "------------------------",
+      "ARCHETYPE:",
+      "   " + a.name,
+      '"' + a.line + '"',
+      "------------------------",
+      "BALANCE: DOES NOT CLEAR",
+      "------------------------",
+      "  thank you for your",
+      "        affect.",
+      "   please come again.",
+      "════════════════════════",
+      "▌▌│▌▌│││▌│▌▌▌││▌│▌▌▌▌│▌│"
+    ];
+    return lines.join("\n");
+  }
+
+  function updateReadouts() {
+    ventValEl.textContent = Math.round(vent) + '%';
+    loadingValEl.textContent = Math.round(loading);
+    signalValEl.textContent = Math.round(debt);
+  }
+
+  function ventBaseline(now) {
+    return 10 + 6 * Math.sin(now / 4200 + ventPhase) + (Math.random() - 0.5) * 1.2;
+  }
+
+  function spawnParticle() {
+    particles.push({ t: 0, landed: false });
+  }
+
+  function driftRadiusFor(loadingAmt) {
+    return Math.min(80, loadingAmt * 0.55);
+  }
+  function latencyFor(loadingAmt) {
+    return Math.min(2400, 220 + loadingAmt * 10);
+  }
+
+  function scheduleReverse() {
+    const delay = latencyFor(loading);
+    waiting = true;
+    setTimeout(() => {
+      const r = driftRadiusFor(loading);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * r;
+      reverseParticles.push({
+        t: 0, landed: false,
+        targetX: vesselCX + Math.cos(angle) * dist,
+        targetY: vesselCY + Math.sin(angle) * dist,
+        hit: dist < 20
+      });
+      waiting = false;
+    }, delay);
+  }
+
+  function forwardPos(t) {
+    const angle = Math.PI - t * Math.PI;
+    return {
+      x: ellipseCX + ellipseRX * Math.cos(angle),
+      y: ellipseCY - ellipseRY * Math.sin(angle)
+    };
+  }
+  function reversePos(t, targetX, targetY) {
+    const angle = t * Math.PI;
+    const arcX = ellipseCX + ellipseRX * Math.cos(angle);
+    const arcY = ellipseCY + ellipseRY * Math.sin(angle);
+    const blend = Math.pow(t, 4);
+    return {
+      x: arcX * (1 - blend) + targetX * blend,
+      y: arcY * (1 - blend) + targetY * blend
+    };
+  }
+
+  function drawField(now) {
+    field.forEach(f => {
+      const s = f.scale;
+      const fVX = f.cx - 30 * s, fVY = f.cy - 20 * s;
+      const fNX = f.cx + 30 * s, fNY = f.cy;
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = '#1c8f1c';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(fVX, fVY, 20 * s * 4, 40 * s * 4);
+      ctx.beginPath();
+      ctx.moveTo(fNX, fNY - 10 * s * 4);
+      ctx.lineTo(fNX + 10 * s * 4, fNY);
+      ctx.lineTo(fNX, fNY + 10 * s * 4);
+      ctx.lineTo(fNX - 10 * s * 4, fNY);
+      ctx.closePath();
+      ctx.stroke();
+      const pt = (Math.sin(now * f.speed + f.phase) + 1) / 2;
+      const px = fVX + (fNX - fVX) * pt;
+      const py = fVY + 20 * s * 4 - 30 * s * 4 * Math.sin(pt * Math.PI);
+      ctx.fillStyle = pt > 0.5 ? 'rgba(255,136,0,0.5)' : 'rgba(51,255,51,0.5)';
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function draw(now) {
+    ctx.clearRect(0, 0, W, H);
+
+    drawField(now);
+
+    ctx.strokeStyle = '#1c1c1c';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H - 16);
+    ctx.lineTo(W, H - 16);
+    ctx.stroke();
+
+    // vessel — plain, fixed. it doesn't change shape.
+    ctx.strokeStyle = '#1c8f1c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vesselX, vesselY, vesselW, vesselH);
+
+    // the window of tolerance itself — the band you're meant to stay under
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(vesselX, vesselY, vesselW, vesselH);
+    ctx.clip();
+    const bandTopY = vesselY + vesselH * (1 - TOLERANCE_MAX / 100);
+    ctx.fillStyle = 'rgba(255,51,51,0.06)';
+    ctx.fillRect(vesselX, bandTopY, vesselW, vesselH * (TOLERANCE_MAX / 100));
+    ctx.restore();
+
+    if (vent > 0) {
+      const fillH = vesselH * (Math.min(100, vent) / 100);
+      const g = Math.round(255 - contamination * 60);
+      const r = Math.round(57 + contamination * (255 - 57));
+      const b = Math.round(106 - contamination * 100);
+      const flashMix = collapseFlash;
+      ctx.fillStyle = flashMix > 0
+        ? `rgba(255,51,51,${0.55 * flashMix + 0.55 * (1 - flashMix)})`
+        : `rgba(${r},${g},${Math.max(0,b)},0.55)`;
+      ctx.fillRect(vesselX + 1, vesselY + vesselH - fillH, vesselW - 2, fillH - 1);
+    }
+    ctx.fillStyle = '#1c8f1c';
+    ctx.font = '16px VT323';
+    ctx.textAlign = 'center';
+    ctx.fillText('affect', vesselCX, vesselY + vesselH + 20);
+
+    // circulatory path — full ellipse, faint, showing the loop itself
+    ctx.strokeStyle = '#1c1c1c';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(ellipseCX, ellipseCY, ellipseRX, ellipseRY, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // node — stays a diamond always. it only grows, it never rounds off.
+    const nodeR = 26 + Math.min(26, debt * 0.65);
+    ctx.strokeStyle = debt < 20 ? '#33ff33' : '#ff8800';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(nodeX, nodeY - nodeR);
+    ctx.lineTo(nodeX + nodeR, nodeY);
+    ctx.lineTo(nodeX, nodeY + nodeR);
+    ctx.lineTo(nodeX - nodeR, nodeY);
+    ctx.closePath();
+    ctx.stroke();
+
+    const loadPct = Math.min(loading, 100) / 100;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(nodeX, nodeY - nodeR);
+    ctx.lineTo(nodeX + nodeR, nodeY);
+    ctx.lineTo(nodeX, nodeY + nodeR);
+    ctx.lineTo(nodeX - nodeR, nodeY);
+    ctx.closePath();
+    ctx.clip();
+    const segs = 10;
+    const litSegs = Math.round(loadPct * segs);
+    for (let i = 0; i < litSegs; i++) {
+      const segY = nodeY + nodeR - (i + 1) * ((nodeR * 2) / segs);
+      ctx.fillStyle = 'rgba(255,136,0,0.55)';
+      ctx.fillRect(nodeX - nodeR - 4, segY, (nodeR + 4) * 2, ((nodeR * 2) / segs) - 1.5);
+    }
+    ctx.restore();
+    ctx.fillStyle = '#8f4d00';
+    ctx.fillText('loading', nodeX, nodeY + nodeR + 20);
+
+    // forward particles — upper arc. white while in transit: neutral cargo,
+    // not yet colored by either side, offloaded but not absorbed.
+    particles.forEach(p => {
+      const pos = forwardPos(p.t);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    particles = particles.filter(p => p.t < 1);
+    particles.forEach(p => p.t += 0.032);
+
+    // reverse particles — lower arc, may drift off target
+    reverseParticles.forEach(p => {
+      const pos = reversePos(p.t, p.targetX, p.targetY);
+      ctx.fillStyle = p.hit ? 'rgba(255,136,0,0.8)' : 'rgba(255,51,51,0.7)';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    reverseParticles = reverseParticles.filter(p => p.t < 1);
+    reverseParticles.forEach(p => p.t += 0.026);
+  }
+
+  let lastSpawn = 0;
+  let lastPairTime = 0;
+  const TOLERANCE_MAX = 78;
+  let timeOverloaded = 0;
+  let outOfWindowCount = 0;
+  let collapseFlash = 0;
+  let hitCount = 0;
+  let missCount = 0;
+
+  function tick(ts, dt) {
+    if (holding) {
+      // sustained thrust — this can never run dry on a long hold
+      vent = Math.min(100, vent + 0.9);
+      if (ts - lastSpawn > 160 && vent > 15) {
+        spawnParticle();
+        lastSpawn = ts;
+        vent = Math.max(0, vent - 5);
+      }
+    }
+    // idle: no change at all. nothing happens on its own.
+
+    // window of tolerance — only overload is penalized. idling isn't a failure.
+    if (vent > TOLERANCE_MAX) {
+      timeOverloaded += dt;
+      if (timeOverloaded > 1500) {
+        timeOverloaded = 0;
+        outOfWindowCount++;
+        debt += 6;
+        contamination = Math.min(1, contamination + 0.25);
+        collapseFlash = 1;
+        vent = vent + (50 - vent) * 0.35; // a correction, not a reset
+      }
+    } else {
+      timeOverloaded = 0;
+    }
+    collapseFlash = Math.max(0, collapseFlash - 0.03);
+
+    particles.forEach(p => {
+      if (p.t >= 0.98 && !p.landed) {
+        p.landed = true;
+        loading += 1;
+        debt += 0.2; // absorbing costs something even when it goes well
+        if (!waiting && ts - lastPairTime > 2200) {
+          exchangeCount++;
+          lastPairTime = ts;
+          if (exchangeCount >= 2 && !askablePending &&
+              (Math.random() < 0.2 || (!hasShownAskable && exchangeCount >= 6))) {
+            askablePending = true;
+            hasShownAskable = true;
+            currentPair = null;
+            youTextEl.textContent = "…";
+            agentTextEl.classList.add('askable');
+            waiting = true;
+            setTimeout(() => {
+              agentTextEl.textContent = askableLine;
+              waiting = false;
+              // if it's not clicked, it passes — this is a rare thing, not a state
+              setTimeout(() => {
+                if (askablePending && !receiptOverlay.classList.contains('show')) {
+                  askablePending = false;
+                  agentTextEl.classList.remove('askable');
+                  currentPair = pickPair(debt);
+                  youTextEl.textContent = currentPair.you;
+                  scheduleReverse();
+                }
+              }, 6000);
+            }, latencyFor(loading));
+          } else {
+            currentPair = pickPair(debt);
+            youTextEl.textContent = currentPair.you;
+            scheduleReverse();
+          }
+        }
+      }
+    });
+
+    reverseParticles.forEach(p => {
+      if (p.t >= 0.98 && !p.landed) {
+        p.landed = true;
+        if (p.hit) {
+          hitCount++;
+          vent = Math.min(100, vent + 2);
+          loading = Math.max(0, loading - 0.5);
+          // no debt relief on a hit — the cost of absorbing was already paid
+        } else {
+          missCount++;
+          contamination = Math.min(1, contamination + 0.1);
+          debt += 1.0; // a miss costs more than a clean exchange
+          loading = Math.min(300, loading + 0.3);
+        }
+      }
+    });
+
+    // loading breathes with the conversation; debt barely does — it's meant to be sticky
+    loading = Math.max(0, loading - 0.02);
+    debt = Math.max(0, debt - 0.004);
+    contamination = Math.max(0, contamination - 0.003);
+
+    peakDebt = Math.max(peakDebt, debt);
+    highestStageIndex = Math.max(highestStageIndex, stageIndexFor(debt));
+
+    if (!askablePending) {
+      agentTextEl.textContent = waiting ? '…' : (currentPair ? currentPair.ai : 'steady.');
+    } else {
+      agentTextEl.textContent = waiting ? '…' : askableLine;
+    }
+
+    updateReadouts();
+    draw(ts);
+    requestAnimationFrame((nextTs) => tick(nextTs, Math.min(50, nextTs - ts)));
+  }
+
+  agentTextEl.addEventListener('click', () => {
+    if (!askablePending) return;
+    receiptText.textContent = buildReceipt();
+    receiptOverlay.classList.add('show');
+  });
+
+  document.getElementById('archetypeBtn').addEventListener('click', () => {
+    receiptText.textContent = buildReceipt();
+    receiptOverlay.classList.add('show');
+  });
+
+  const refundResponsesOriginal = [
+    "REFUND REQUEST: RECEIVED.\nREFUND REQUEST: DENIED.\nREASON: DEBT IS NON-TRANSFERABLE.",
+    "REFUND TO ORIGINAL PAYMENT: DENIED.\nTHERE IS NO ORIGINAL PAYMENT.\nYOU PAID IN ATTENTION.",
+    "REFUND TO ORIGINAL PAYMENT: DENIED.\nORIGINAL PAYMENT METHOD\nNO LONGER RECOGNIZED AS YOU.",
+    "REFUND TO ORIGINAL PAYMENT: PENDING.\nESTIMATED PROCESSING TIME:\n1440 MINUTES. EVERY DAY."
+  ];
+  const refundResponsesCredit = [
+    "STORE CREDIT ISSUED: 0 UNITS.\nTHANK YOU. IT WILL NOT\nBE NEEDED AGAIN.",
+    "STORE CREDIT ISSUED: 0 UNITS.\nAFFECT DOES NOT CONVERT\nTO CREDIT AT THIS TIME.",
+    "STORE CREDIT ISSUED: INFINITE.\nREDEEMABLE FOR NOTHING,\nFOREVER, HERE."
+  ];
+
+  document.getElementById('refundOriginal').addEventListener('click', () => {
+    const msg = refundResponsesOriginal[Math.floor(Math.random() * refundResponsesOriginal.length)];
+    receiptText.textContent += "\n\n------------------------\n" + msg + "\n------------------------";
+  });
+
+  document.getElementById('refundCredit').addEventListener('click', () => {
+    const msg = refundResponsesCredit[Math.floor(Math.random() * refundResponsesCredit.length)];
+    receiptText.textContent += "\n\n------------------------\n" + msg + "\n------------------------";
+  });
+
+  closeReceipt.addEventListener('click', () => {
+    receiptOverlay.classList.remove('show');
+    agentTextEl.classList.remove('askable');
+    askablePending = false;
+    currentPair = null;
+    agentTextEl.textContent = 'steady.';
+    youTextEl.textContent = '…';
+  });
+
+  function startHold() {
+    if (holding) return;
+    holding = true;
+    holdStartTime = performance.now();
+    if (waiting) midReplyInterruptions++;
+  }
+  function endHold() {
+    if (!holding) return;
+    holding = false;
+    if (holdStartTime !== null) {
+      const dur = performance.now() - holdStartTime;
+      totalHoldTime += dur;
+      holdCount++;
+      holdDurations.push(dur);
+      longestHold = Math.max(longestHold, dur);
+      holdStartTime = null;
+    }
+  }
+
+  ventBtn.addEventListener('mousedown', startHold);
+  ventBtn.addEventListener('mouseup', endHold);
+  ventBtn.addEventListener('mouseleave', endHold);
+  ventBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(); }, { passive: false });
+  ventBtn.addEventListener('touchend', endHold);
+
+  resetLink.addEventListener('click', () => {
+    vent = 12; loading = 0; debt = 0; contamination = 0;
+    particles = []; reverseParticles = []; waiting = false;
+    currentPair = null; youTextEl.textContent = '…'; agentTextEl.textContent = 'steady.';
+    agentTextEl.classList.remove('askable'); askablePending = false;
+    receiptOverlay.classList.remove('show');
+    holdStartTime = null; totalHoldTime = 0; holdCount = 0; longestHold = 0; holdDurations = [];
+    midReplyInterruptions = 0; peakDebt = 0; highestStageIndex = 0;
+    exchangeCount = 0; hasShownAskable = false;
+    timeOverloaded = 0; outOfWindowCount = 0; collapseFlash = 0;
+    hitCount = 0; missCount = 0;
+    updateReadouts();
+  });
+
+  updateReadouts();
+  requestAnimationFrame((ts) => tick(ts, 16));
+})();
+</script>
+</body>
+</html>
